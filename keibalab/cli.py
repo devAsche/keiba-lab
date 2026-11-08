@@ -80,7 +80,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--valid-from", default=None, help="この日付以降を第二段階（オッズとの合成）の学習に使う")
 
     p = sub.add_parser("backtest")
-    p.add_argument("--first-test-year", type=int, default=None)
+    p.add_argument("--first-test", default=None, help="最初のテスト期間の開始日（省略時は自動）")
+    p.add_argument("--test-months", type=int, default=6)
+    p.add_argument("--valid-months", type=int, default=6)
 
     sub.add_parser("paper-report")
     sub.add_parser("status")
@@ -124,7 +126,7 @@ def main(argv: list[str] | None = None) -> None:
         out = train_and_save(valid_from=args.valid_from)
     elif args.command == "backtest":
         from .backtest import run_backtest
-        out = run_backtest(first_test_year=args.first_test_year)
+        out = run_backtest(first_test=args.first_test, test_months=args.test_months, valid_months=args.valid_months)
     elif args.command == "paper-report":
         from .paper import report
         out = report()
