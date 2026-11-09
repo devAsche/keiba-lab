@@ -45,16 +45,32 @@ def post_datetime(day: str, post_time: str) -> datetime:
     return datetime(d.year, d.month, d.day, hour, minute, tzinfo=config.JST)
 
 
+def meetings_for_day(day: date) -> list[dict]:
+    """その日の開催。JRAカレンダーは開催のない日のページに 403 を返すので、それは「開催なし」と読む。
+    土日にJRAで取れなかったときだけ、スポーツナビの月間日程でも確かめる。"""
+    try:
+        meetings = jra.parse_meetings(fetch(jra.calendar_url(day), attempts=2), day)
+    except (NotFoundError, BlockedError):
+        meetings = []
+    if not meetings and day.weekday() >= 5:
+        try:
+            listed = yahoo.parse_monthly_schedule(
+                fetch(yahoo.monthly_schedule_url(day.year, day.month)), day.year, day.month)
+        except NotFoundError:
+            listed = []
+        meetings = [m for m in listed if m["date"] == day.isoformat()]
+        if meetings:
+            log.warning("JRAカレンダーで取れなかったため、スポーツナビの日程で開催を確認しました")
+    return meetings
+
+
 def build_schedule(conn, day: date) -> list[dict]:
     """その日のレースと発走時刻。DBになければJRAカレンダー→スポーツナビの一覧で作る。"""
     rows = [dict(r) for r in conn.execute(
         "SELECT * FROM schedule WHERE date=? ORDER BY post_time, race_id", (day.isoformat(),))]
     if rows:
         return rows
-    try:
-        meetings = jra.parse_meetings(fetch(jra.calendar_url(day)), day)
-    except NotFoundError:
-        meetings = []
+    meetings = meetings_for_day(day)
     if not meetings:
         return []
     for meeting in meetings:

@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS races (
     weather TEXT, going TEXT, class_text TEXT, class_rank REAL, age_cond TEXT,
     handicap INTEGER, prize1 INTEGER, n_runners INTEGER,
     has_result INTEGER NOT NULL DEFAULT 0,
-    fetched_at TEXT
+    fetched_at TEXT,
+    cancelled INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_races_date ON races(date);
 CREATE TABLE IF NOT EXISTS results (
@@ -92,7 +93,21 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=60000")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+MIGRATIONS = [
+    ("races", "cancelled", "INTEGER NOT NULL DEFAULT 0"),
+]
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """古いDBに後から足した列を追加する。"""
+    for table, column, decl in MIGRATIONS:
+        if column not in table_columns(conn, table):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+    conn.commit()
 
 
 @contextmanager

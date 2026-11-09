@@ -151,3 +151,26 @@ def test_intervals():
     assert interval_minutes(20) == 5
     assert interval_minutes(5) == 1
     assert interval_minutes(-3) == 5
+
+
+def test_cancelled_race_is_detected():
+    page = RACE_INFO + '<div class="hr-cancel">東京8R 降雪のため中止</div>'
+    info, runners, _ = yahoo.parse_result(page, "2605010308")
+    assert runners == [] and info["cancelled"] == 1
+    info, runners, _ = yahoo.parse_result(RACE_INFO + RESULT_ROWS, "2508030411")
+    assert info["cancelled"] == 0
+
+
+def test_jra_403_means_no_races_on_weekdays(monkeypatch):
+    from keibalab import odds_recorder
+    from keibalab.http import BlockedError
+
+    calls = []
+
+    def fake_fetch(url, **kwargs):
+        calls.append(url)
+        raise BlockedError("403 " + url)
+
+    monkeypatch.setattr(odds_recorder, "fetch", fake_fetch)
+    assert odds_recorder.meetings_for_day(date(2026, 11, 10)) == []  # 火曜
+    assert len(calls) == 1  # 平日はスポーツナビまで確かめに行かない

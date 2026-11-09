@@ -68,8 +68,8 @@ def collect_meeting(conn, meeting: dict) -> bool:
     ])
     complete = True
     for race in races:
-        row = conn.execute("SELECT has_result FROM races WHERE race_id=?", (race["race_id"],)).fetchone()
-        if row and row["has_result"]:
+        row = conn.execute("SELECT has_result, cancelled FROM races WHERE race_id=?", (race["race_id"],)).fetchone()
+        if row and (row["has_result"] or row["cancelled"]):
             continue
         try:
             page = fetch(yahoo.result_url(race["race_id"]))
@@ -100,6 +100,9 @@ def collect_meeting(conn, meeting: dict) -> bool:
         db.upsert(conn, "payouts", payouts)
         conn.commit()
         if not has_result:
+            if info.get("cancelled"):
+                log.info("中止になったレース: %s", race["race_id"])
+                continue
             complete = False
             log.warning("結果が未確定または解析できず: %s（%d頭）", race["race_id"], len(runners))
     return complete
@@ -128,6 +131,10 @@ def backfill(start: str = "2023-01", end: str | None = None, *, max_minutes: flo
             except BlockedError:
                 log.error("アクセスを拒否されました。収集を止めます。時間をおいて再実行してください。")
                 raise
+            except Exception as error:  # 一時的なサーバーエラーなどは、その開催だけ飛ばして次回に回す
+                conn.rollback()
+                log.warning("開催 %s を後回しにします: %s", meeting["meeting_id"], error)
+                continue
             if ok:
                 conn.execute("UPDATE meetings SET complete=1 WHERE meeting_id=?", (meeting["meeting_id"],))
                 conn.commit()

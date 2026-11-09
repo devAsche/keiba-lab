@@ -265,6 +265,7 @@ def parse_result(page: str, race_id: str) -> tuple[dict, list[dict], list[dict]]
                 "trainer": clean(cells[8]),
             })
     payouts = parse_payouts(page, race_id)
+    info["cancelled"] = 1 if (not runners and re.search(r"\d+R\s*\S{1,10}のため中止", clean(page))) else 0
     info["n_runners"] = sum(1 for r in runners if r["finish"] is not None or r["finish_text"] in ("中止", "失格"))
     return info, runners, payouts
 
