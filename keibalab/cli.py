@@ -35,6 +35,17 @@ def setup_logging(name: str) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=handlers)
 
 
+def _collect_start(default: str) -> str:
+    """data/collect_config.json の {"start": "2010-01"} があればそれを使う（プログラムを変えずに範囲を変えられる）。"""
+    path = config.DATA_DIR / "collect_config.json"
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8")).get("start", default)
+        except Exception:
+            return default
+    return default
+
+
 def _date(value: str | None) -> date:
     if not value or value == "today":
         return config.now_jst().date()
@@ -74,6 +85,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--start", default=DEFAULT_START)
     p.add_argument("--max-minutes", type=float, default=360)
 
+    p = sub.add_parser("pedigree")
+    p.add_argument("--max-minutes", type=float, default=None)
+    p.add_argument("--since", default=None, help="この日付以降のレースの馬だけ（例 2023-01-01）")
+
     sub.add_parser("validate")
 
     p = sub.add_parser("train")
@@ -110,9 +125,18 @@ def main(argv: list[str] | None = None) -> None:
             except Exception as error:  # モデルが無い・ライブラリが無いときは記録だけ行う
                 log.info("仮想購入は行いません（%s）。オッズの記録だけ行います。", error)
         out = run_day(_date(args.date), max_minutes=args.max_minutes, on_tick=hook)
+    elif args.command == "pedigree":
+        from .collect_pedigree import collect
+        out = collect(max_minutes=args.max_minutes, since=args.since)
     elif args.command == "nightly":
+        import time as _time
         from .collect_history import backfill
-        out = {"backfill": backfill(args.start, None, max_minutes=args.max_minutes)}
+        from .collect_pedigree import collect
+        start = _collect_start(args.start)
+        began = _time.monotonic()
+        out = {"backfill": backfill(start, None, max_minutes=args.max_minutes)}
+        left = args.max_minutes - (_time.monotonic() - began) / 60
+        out["pedigree"] = collect(max_minutes=max(left, 30))
         try:
             from .paper import settle
             out["paper_settle"] = settle()

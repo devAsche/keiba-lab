@@ -20,7 +20,7 @@ USER_AGENT = "keiba-lab/0.1 (personal research; polite crawler)"
 
 # ホストごとの最小アクセス間隔（秒）。相手に負荷をかけないための値。
 MIN_INTERVAL_SEC = {
-    "sports.yahoo.co.jp": 2.5,
+    "sports.yahoo.co.jp": 2.0,
     "race.netkeiba.com": 2.0,
     "www.jra.go.jp": 2.5,
 }
